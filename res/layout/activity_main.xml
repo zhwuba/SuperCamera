@@ -1,0 +1,20 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity" >
+
+    <GridView 
+        android:gravity="center" 
+        android:id="@+id/main_action" 
+        android:layout_width="fill_parent" 
+        android:layout_height="fill_parent" 
+        android:layout_marginTop="20dp"
+        android:layout_marginLeft="20dp"
+        android:layout_marginRight="20dp"
+        android:stretchMode="columnWidth" 
+        android:horizontalSpacing="20dp"
+        android:columnWidth="150.0dip" 
+        android:numColumns="auto_fit" />
+
+</RelativeLayout>
