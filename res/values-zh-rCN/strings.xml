@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">SuperCamera</string>
+    <string name="hello_world">Hello world!</string>
+    <string name="menu_settings">Settings</string>
+    
+    <string name="action_start">开始录像</string>
+    <string name="action_stop">停止录像</string>
+    <string name="action_delete">删除所有录像</string>
+    <string name="notification">录像中！</string>
+    
+     <string name="recorder_error_toast">录像错误，请检查SD卡是否可用！</string>
+     
+      <string name="recorder_error_toast_no_space">录像启动失败，存储空间可能不足！</string>
+
+</resources>

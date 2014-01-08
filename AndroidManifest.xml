@@ -40,6 +40,14 @@
   			</intent-filter> 
         </receiver>
         
+        <receiver android:name="com.tydtech.supercamera.SdMountReceiver">   
+            <intent-filter >   
+    			<action android:name="android.intent.action.MEDIA_REMOVED" />   
+    			<action android:name="android.intent.action.MEDIA_UNMOUNTED" />
+    			<action android:name="android.intent.action.super.ERRORS" />
+  			</intent-filter> 
+        </receiver>
+        
     </application>
 
 </manifest>

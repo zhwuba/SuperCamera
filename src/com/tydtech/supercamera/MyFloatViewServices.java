@@ -14,6 +14,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.util.Log;
+import android.widget.Toast;
 
 public class MyFloatViewServices extends Service {
 	private static final String TAG = "SuperCamera.MyFloatViewServices";
@@ -26,7 +27,13 @@ public class MyFloatViewServices extends Service {
 		public void handleMessage(Message msg) {
 			if(msg.what == MSG_DELETE){
 				//new SuperCameraDeleteThread().start();
-				Util.deleteOldFiles();
+				boolean ret = Util.deleteOldFiles();
+				if(!ret){
+					sendBroadcast(new Intent("android.intent.action.super.ERRORS"));
+					Toast.makeText(MyFloatViewServices.this, 
+							getResources().getString(R.string.recorder_error_toast_no_space), 
+							Toast.LENGTH_LONG).show();
+				}
 			}
 		}
 	};

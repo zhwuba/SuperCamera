@@ -6,8 +6,13 @@
     <string name="menu_settings">Settings</string>
     
     <string name="action_start">Start Recorder</string>
-    <string name="action_stop">Start Recorder</string>
+    <string name="action_stop">Stop Recorder</string>
     <string name="action_delete">Delete All</string>
     <string name="notification">Recording!</string>
+    
+    <string name="video_file_name_format" translatable="false">"yyyyMMdd_HHmmss"</string>
+    
+    <string name="recorder_error_toast">Recorde errors, please check SD card!</string>
+    <string name="recorder_error_toast_no_space">Recorde errors, maybe do\'t have enough memory space!</string>
 
 </resources>

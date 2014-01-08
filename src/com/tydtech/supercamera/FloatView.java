@@ -8,6 +8,8 @@ package com.tydtech.supercamera;
 
 import java.io.File;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 
 
@@ -20,9 +22,11 @@ import android.hardware.Camera;
 import android.hardware.Camera.Size;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
+import android.media.MediaRecorder.OnErrorListener;
 import android.media.MediaRecorder.OnInfoListener;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.OrientationEventListener;
@@ -31,6 +35,7 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.Toast;
 
 public class FloatView extends View {
 	private static final String TAG = "SuperCamera.FloatView";
@@ -46,7 +51,7 @@ public class FloatView extends View {
 	private CameraPreview mSurfaceView;
 	
 	private Camera mCamera;
-	private MediaRecorder mMediaRecorder;
+	private MediaRecorder mMediaRecorder = null;
 	private CamcorderProfile mProfile;
 	
 	private MyOrientationEventListener mOrientationListener;
@@ -62,7 +67,15 @@ public class FloatView extends View {
 	
 	private File mFile;
 	
-	private Handler mHandle = new Handler();
+	private static final int MSG_START_RECORDER = 0;
+	
+	private Handler mHandle = new Handler(){
+		public void handleMessage(Message msg) {
+			if(msg.what == MSG_START_RECORDER){
+				startVideoRecording();
+			}
+		}
+	};
 
 	public FloatView(Context context) {
 		super(context);
@@ -73,9 +86,14 @@ public class FloatView extends View {
 		mNotificationManager = (NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);
 		
 		mOrientationListener = new MyOrientationEventListener(mContext);
+
 	}
 	
 	public void showFloatView(){
+		
+		CameraOpenThread cameraOpenThread = new CameraOpenThread();
+	    cameraOpenThread.start();
+	    
 		mParams = new WindowManager.LayoutParams();
 		mParams.type = WindowManager.LayoutParams.TYPE_SYSTEM_ALERT; 
 		mParams.format = PixelFormat.RGBA_8888;
@@ -83,8 +101,8 @@ public class FloatView extends View {
                 | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE 
                 | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE; 
 		
-		mParams.width = 1;
-		mParams.height = 1;
+		mParams.width = 1;//200;
+		mParams.height = 1;//200;
 		mParams.x = 0;
 		mParams.y = 0;
 		mParams.gravity = Gravity.LEFT | Gravity.BOTTOM;
@@ -93,9 +111,153 @@ public class FloatView extends View {
 		
 		mWindoManager.addView(mSurfaceView, mParams);
 		
-		mProfile = CamcorderProfile.get(0, CamcorderProfile.QUALITY_HIGH);
+		try{
+		    cameraOpenThread.join();
+		    if(mCamera == null){
+		    	return;
+		    }
+		}catch(InterruptedException e){
+			//return;
+		}
+		
+		Thread startPreviewThread = new Thread(new Runnable() {
+	            @Override
+	            public void run() {
+	                startPreview();
+	            }
+	        });
+	    startPreviewThread.start();
+		
+		
+		 // Make sure preview is started.
+        try {
+            startPreviewThread.join();
+            if(mCamera == null){
+		    	return;
+		    }
+        } catch (InterruptedException ex) {
+            // ignore
+        }
+        
+        mProfile = CamcorderProfile.get(0, CamcorderProfile.QUALITY_HIGH);
 		
 		showNotification();
+		
+		
+		mHandle.removeMessages(MSG_START_RECORDER);
+		mHandle.sendEmptyMessageDelayed(MSG_START_RECORDER, 2000);
+	}
+	
+	
+	protected class CameraOpenThread extends Thread {
+        @Override
+        public void run() {
+            openCamera();
+        }
+    }
+	
+	private void openCamera(){
+		try{
+			mCamera = Camera.open();
+			Camera.Parameters params = mCamera.getParameters();
+			mCamera.setParameters(params);
+		}catch(RuntimeException e){
+			Log.d(TAG, "zhangwuba openCamera fail");
+			mCamera = null;
+		}
+	}
+	
+	private void startPreview(){
+		if(mCamera != null){
+			try {
+				mCamera.setPreviewDisplay(mSurfaceView.getHolder());
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			//mCamera.setDisplayOrientation(180);
+			setCameraDisplayOrientation(0,mCamera);
+			mCamera.startPreview();
+		}
+	}
+	
+	private void stopPreview(){
+		if(mCamera != null){
+			mCamera.stopPreview();
+		 }
+	}
+	
+	private void startVideoRecording(){
+		
+		Intent intent = new Intent("intent.action.supercamera.checkspace");
+	    mContext.sendBroadcast(intent);
+	     
+		mCamera.unlock();
+		//if(mMediaRecorder != null){
+			initializeRecorder();
+		//}
+		mMediaRecorder.setPreviewDisplay(mSurfaceView.getHolder().getSurface());
+		
+		mMediaRecorder.setMaxDuration(1000*60*3);
+		
+		try {
+			mMediaRecorder.prepare();
+			mMediaRecorder.start(); 
+		} catch (IllegalStateException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		mMediaRecorder.setOnInfoListener(mRecorderInfoListen);
+		mMediaRecorder.setOnErrorListener(mRecorderErrorLsiten);
+		
+	}
+	
+	private void stopVideoRecording(){
+		if(mMediaRecorder != null){
+			mMediaRecorder.stop();
+			mMediaRecorder.reset();
+			mMediaRecorder.setOnInfoListener(null);
+			mMediaRecorder.setOnErrorListener(null);
+		}
+		 if(mMediaRecorder != null){
+			 mMediaRecorder.release();
+		 }
+		 
+	}
+	
+	private void initializeRecorder(){
+		mMediaRecorder = new MediaRecorder();
+		mMediaRecorder.setCamera(mCamera);
+		mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
+		mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
+		mMediaRecorder.setOutputFormat(mProfile.fileFormat);
+		mMediaRecorder.setVideoFrameRate(mProfile.videoFrameRate);
+		mMediaRecorder.setVideoSize(mProfile.videoFrameWidth,
+                mProfile.videoFrameHeight);
+        mMediaRecorder.setVideoEncodingBitRate(mProfile.videoBitRate);
+        mMediaRecorder.setVideoEncoder(mProfile.videoCodec);
+        mMediaRecorder.setAudioEncodingBitRate(mProfile.audioBitRate);
+        mMediaRecorder.setAudioChannels(mProfile.audioChannels);
+        mMediaRecorder.setAudioSamplingRate(mProfile.audioSampleRate);
+        mMediaRecorder.setAudioEncoder(mProfile.audioCodec);
+        
+        String path = Util.getSuperCameraVideoPath();
+        mFile = new File(path);
+		if(!mFile.exists()){
+			mFile.mkdirs();
+		}
+		long currentTime = System.currentTimeMillis();
+		Date date = new Date(currentTime);
+		SimpleDateFormat dateFormat = 
+				new SimpleDateFormat(mContext.getResources().getString(R.string.video_file_name_format));
+		String uniqueOutFile = path + "/super-" + dateFormat.format(date) + ".mp4";
+		File outFile = new File(mFile,uniqueOutFile);
+		
+		mMediaRecorder.setOutputFile(uniqueOutFile);
 	}
 	
 	class CameraPreview extends SurfaceView implements SurfaceHolder.Callback {
@@ -118,7 +280,7 @@ public class FloatView extends View {
 
 		@Override
 		public void surfaceCreated(SurfaceHolder arg0) {
-			initVedioRecorder(mHolder);
+			//initVedioRecorder(mHolder);
 		}
 
 		@Override
@@ -155,92 +317,6 @@ public class FloatView extends View {
 	     camera.setDisplayOrientation(270);
 	  }
 	
-	public void initVedioRecorder(SurfaceHolder surfaceHolder){
-		
-		     Intent intent = new Intent("intent.action.supercamera.checkspace");
-		     mContext.sendBroadcast(intent);
-		 
-		try {           
-			
-			  if(mOrientationListener != null){
-				  //mOrientationListener.enable();
-			  }
-			 
-	        	mCamera = Camera.open();
-	        	Camera.Parameters params = mCamera.getParameters();
-	        	mCamera.setParameters(params);
-	        	
-	        	Camera.Parameters p = mCamera.getParameters();
-	        	
-	        	final List<Size> listSize = p.getSupportedPreviewSizes();
-				Size mPreviewSize = listSize.get(2);
-				Log.v(TAG, "use: width = " + mPreviewSize.width 
-							+ " height = " + mPreviewSize.height);
-				//p.setPreviewSize(mPreviewSize.width, mPreviewSize.height);
-				//p.setPreviewFormat(PixelFormat.YCbCr_420_SP);
-				
-				mCamera.setParameters(p);
-				
-				mCamera.setPreviewDisplay(surfaceHolder);
-				//mCamera.setDisplayOrientation(180);
-				setCameraDisplayOrientation(0,mCamera);
-				mCamera.startPreview();
-				
-				mCamera.unlock();
-				
-				mMediaRecorder = new MediaRecorder();
-				mMediaRecorder.setCamera(mCamera);
-				mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
-				mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
-				mMediaRecorder.setOutputFormat(mProfile.fileFormat);
-				mMediaRecorder.setVideoFrameRate(mProfile.videoFrameRate);
-				mMediaRecorder.setVideoSize(mProfile.videoFrameWidth,
-		                mProfile.videoFrameHeight);
-		        mMediaRecorder.setVideoEncodingBitRate(mProfile.videoBitRate);
-		        mMediaRecorder.setVideoEncoder(mProfile.videoCodec);
-		        mMediaRecorder.setAudioEncodingBitRate(mProfile.audioBitRate);
-	            mMediaRecorder.setAudioChannels(mProfile.audioChannels);
-	            mMediaRecorder.setAudioSamplingRate(mProfile.audioSampleRate);
-	            mMediaRecorder.setAudioEncoder(mProfile.audioCodec);
-	            //mMediaRecorder.setOrientationHint(90);
-
-	            
-				
-				
-				
-				mFile = new File(Environment.getExternalStorageDirectory()
-						.toString() + "/supercamera/");
-				if(!mFile.exists()){
-					mFile.mkdirs();
-				}
-				long currentTime = System.currentTimeMillis();
-				
-				String uniqueOutFile = Environment.getExternalStorageDirectory()
-						.toString() + "/supercamera/super-" + currentTime + ".mp4";
-				File outFile = new File(mFile,uniqueOutFile);
-				
-				mMediaRecorder.setOutputFile(uniqueOutFile);
-				
-				mMediaRecorder.setVideoFrameRate(30);
-				mMediaRecorder.setVideoSize(mPreviewSize.width, mPreviewSize.height);
-				
-				mMediaRecorder.setPreviewDisplay(surfaceHolder.getSurface());
-				
-				mMediaRecorder.setMaxDuration(1000*60*3);
-				
-				mMediaRecorder.prepare();
-				mMediaRecorder.start(); 
-				
-				mMediaRecorder.setOnInfoListener(mRecorderInfoListen);
-				
-	        } catch (RuntimeException e) {  
-	            e.printStackTrace();  
-	            mCamera = null;  
-	        } catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-	}
 	
 	public void stopVedioRecorder(){
 		
@@ -279,10 +355,6 @@ public class FloatView extends View {
 			 mCamera.release();  
 			 mCamera = null;
 		 }
-		 
-		 if(mOrientationListener != null){
-			 //mOrientationListener.disable();
-		 }
 	}
 	
 	OnInfoListener mRecorderInfoListen = new OnInfoListener() {
@@ -292,9 +364,26 @@ public class FloatView extends View {
 			// TODO Auto-generated method stub
 			if(what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED){
 				Log.i(TAG,"zhangwuba --- dution retach");
-				releaseVedioRecorder();
-				initVedioRecorder(mSurfaceView.getHolder());
+				stopVideoRecording();
+				mHandle.removeMessages(MSG_START_RECORDER);
+				mHandle.sendEmptyMessage(MSG_START_RECORDER);
+				//releaseVedioRecorder();
+				//initVedioRecorder(mSurfaceView.getHolder());
 			}
+		}
+	};
+	
+	OnErrorListener mRecorderErrorLsiten = new OnErrorListener() {
+		
+		@Override
+		public void onError(MediaRecorder mr, int what, int extra) {
+			// TODO Auto-generated method stub
+			Log.i(TAG,"zhangwuba --- mRecorderErrorLsiten what = " + what);
+			mNotificationManager.cancel(NOTIFICATION_ID);
+			Toast.makeText(mContext, 
+					mContext.getString(R.string.recorder_error_toast), 
+					Toast.LENGTH_LONG).show();
+			mContext.sendBroadcast(new Intent("android.intent.action.super.ERRORS"));
 		}
 	};
 	

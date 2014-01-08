@@ -122,9 +122,6 @@ public class MainActivity extends Activity implements OnItemClickListener {
 		 Util.deleteAllFiles();
 	}
    }
-
-  
-   
-   
+ 
     
 }

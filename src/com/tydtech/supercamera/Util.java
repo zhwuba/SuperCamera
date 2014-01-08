@@ -1,11 +1,16 @@
 /**
  * Create by zhangwuba 2014-1-2
+ * add support external sd --2014-1-7
  * 
  */
 
 package com.tydtech.supercamera;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -29,6 +34,55 @@ public class Util {
 	
 	// Orientation hysteresis amount used in rounding, in degrees
     public static final int ORIENTATION_HYSTERESIS = 5;
+    
+    public static final long MEM_SPACE_BETA = 2048 * 1024;// * 1024; //2G
+    
+    public static final long MEM_SPACE_LOW_BETA = 100 * 1024;//
+    
+    
+    public static String getExternalSdPath(){
+    	String externalSdPath = null;
+    	
+    	Runtime runtime = Runtime.getRuntime();
+    	try {
+			Process proc = runtime.exec("mount");
+			InputStream is = proc.getInputStream();
+            InputStreamReader isr = new InputStreamReader(is);
+            String line;
+            BufferedReader br = new BufferedReader(isr);
+            while((line = br.readLine()) != null){
+            	if(line.contains("/storage/sdcard1")){
+            		externalSdPath = "/storage/sdcard1";
+            		break;
+            	}
+            }
+			
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+    	
+    	return externalSdPath;
+    	
+    }
+    
+    public static boolean isExternalSdMount(){
+    	if(getExternalSdPath() != null){
+    		return true;
+    	}else{
+    		return false;
+    	}
+    }
+    
+    public static String getSuperCameraVideoPath(){
+    	String path = getExternalSdPath();
+    	if(path == null){
+    		path = SUPERCAMERA_PATH;
+    	}else{
+    		path = path + "/supercamera/";
+    	}
+    	return path;
+    }
 	
 	
 	public static HashMap<String, String> getSupeCameraFilelist(File file) {
@@ -65,10 +119,10 @@ public class Util {
 	        public long free;
 	    }
 	 
-   public static SDCardInfo getMemSpace(){
-		File pathFile = android.os.Environment.getExternalStorageDirectory();
+   public static SDCardInfo getMemSpace(String path){
+		//File pathFile = android.os.Environment.getExternalStorageDirectory();
 		 try {
-          android.os.StatFs statfs = new android.os.StatFs(pathFile.getPath());
+          android.os.StatFs statfs = new android.os.StatFs(path);
           long nTotalBlocks = statfs.getBlockCount();
           long nBlocSize = statfs.getBlockSize();
           long nAvailaBlock = statfs.getAvailableBlocks();
@@ -85,13 +139,24 @@ public class Util {
 	}
 	
 	
-   public static void deleteOldFiles(){
-
-		SDCardInfo info = getMemSpace();
+   public static boolean deleteOldFiles(){
+	    boolean ret = true;
+	   try{
+        String path = getExternalSdPath();
+        if(path == null){
+        	path = android.os.Environment.getExternalStorageDirectory().getPath();
+        }
+        
+        Log.d(TAG, "zhangwuba ----- deleteOldFiles path = " + path);
+        
+		SDCardInfo info = getMemSpace(path);
 		long free = info.free / 1024;
-		long  alpa = 2048 * 1024;// * 1024; //2G
 		
-		File file  = new File(SUPERCAMERA_PATH);
+		if(free < MEM_SPACE_LOW_BETA){
+			return false;
+		}
+		
+		File file  = new File(getSuperCameraVideoPath());
 		
 		HashMap<String, String> fileList = getSupeCameraFilelist(file);
 		//Iterator<String> ite = fileList.keySet().iterator();
@@ -128,7 +193,7 @@ public class Util {
 		
 		 
 	//Log.i(TAG, "zhangwuba --- alpa = " + alpa);
-	 if(free < alpa){
+	 if(free < MEM_SPACE_BETA){
 		 //Log.i(TAG, "zhangwuba --- sortList.size() = ");
 		if(sortList != null){
 			Log.i(TAG, "zhangwuba --- sortList.size() = " + sortList.size());
@@ -138,13 +203,18 @@ public class Util {
 					File oldf = new File(old);
 					oldf.delete();
 				}
-			}else{
+			}else if(sortList.size() > 10){
 				String old = sortList.get(0).getValue();
 				File oldf = new File(old);
 				oldf.delete();
 			}
 		}
-	 }
+	  }
+	 }catch (Exception e) {
+		// TODO: handle exception
+		 ret = false;
+	}
+	     return ret;
    }
    
    public static void deleteAllFiles(){
@@ -156,6 +226,20 @@ public class Util {
 			String flist = fileList.get(ite.next());
 			File df = new File(flist);
 			df.delete();
+		}
+		
+		String sdPath = getExternalSdPath();
+		if(sdPath != null){
+			sdPath = sdPath + "/supercamera/";
+			 File filesd  = new File(sdPath);
+				
+				HashMap<String, String> fileListsd = getSupeCameraFilelist(filesd);
+				Iterator<String> itesd = fileListsd.keySet().iterator();
+				while(itesd.hasNext()){
+					String flist = fileListsd.get(itesd.next());
+					File df = new File(flist);
+					df.delete();
+				}
 		}
    }
    
